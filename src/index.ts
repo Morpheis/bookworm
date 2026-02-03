@@ -1,0 +1,282 @@
+#!/usr/bin/env node
+import { Command } from 'commander';
+import fs from 'fs';
+import path from 'path';
+import { chunkText } from './chunker.js';
+import { createSession, saveSession, loadSession, listSessions } from './state.js';
+import { readChunk } from './reader.js';
+import { formatJournalEntry, formatFullJournal } from './journal.js';
+import type { ChunkMode, ReadingSession, JournalEntry } from './types.js';
+
+const SESSIONS_DIR = path.join(process.cwd(), 'sessions');
+const JOURNALS_DIR = path.join(process.cwd(), 'journals');
+
+const program = new Command();
+
+program
+  .name('bookworm')
+  .description('Experience reading — sequential text processing with imagination and reflection')
+  .version('0.1.0');
+
+program
+  .command('read')
+  .description('Start reading a new book')
+  .argument('<file>', 'Path to text file')
+  .option('-t, --title <title>', 'Book title (defaults to filename)')
+  .option('-a, --author <author>', 'Book author')
+  .option('-c, --chunk <mode>', 'Chunk mode: sentence, paragraph, chapter', 'paragraph')
+  .option('-m, --model <model>', 'AI model to use', 'claude-sonnet-4-20250514')
+  .option('-n, --count <n>', 'Number of chunks to read immediately', '1')
+  .action(async (file: string, opts) => {
+    const filePath = path.resolve(file);
+    if (!fs.existsSync(filePath)) {
+      console.error(`File not found: ${filePath}`);
+      process.exit(1);
+    }
+
+    const text = fs.readFileSync(filePath, 'utf-8');
+    const title = opts.title ?? path.basename(file, path.extname(file));
+    const chunkMode = opts.chunk as ChunkMode;
+    const chunks = chunkText(text, chunkMode);
+
+    if (chunks.length === 0) {
+      console.error('No content found in file.');
+      process.exit(1);
+    }
+
+    const session = createSession(filePath, title, chunks.length, chunkMode, opts.author);
+    saveSession(session, SESSIONS_DIR);
+
+    console.log(`📖 Starting: "${title}"${opts.author ? ` by ${opts.author}` : ''}`);
+    console.log(`   ${chunks.length} ${chunkMode}s to read`);
+    console.log(`   Session: ${session.id}\n`);
+
+    const count = parseInt(opts.count, 10);
+    await readNext(session, chunks, count, opts.model);
+  });
+
+program
+  .command('next')
+  .description('Read the next chunk(s)')
+  .option('-s, --session <id>', 'Session ID (uses most recent if omitted)')
+  .option('-n, --count <n>', 'Number of chunks to read', '1')
+  .option('-m, --model <model>', 'AI model to use', 'claude-sonnet-4-20250514')
+  .action(async (opts) => {
+    const session = resolveSession(opts.session);
+    if (!session) return;
+
+    const text = fs.readFileSync(session.bookPath, 'utf-8');
+    const chunks = chunkText(text, session.chunkMode);
+    const count = parseInt(opts.count, 10);
+
+    await readNext(session, chunks, count, opts.model);
+  });
+
+program
+  .command('list')
+  .description('List all reading sessions')
+  .action(() => {
+    const sessions = listSessions(SESSIONS_DIR);
+    if (sessions.length === 0) {
+      console.log('No reading sessions yet. Start one with: bookworm read <file>');
+      return;
+    }
+
+    console.log('📚 Reading Sessions:\n');
+    for (const s of sessions) {
+      const progress = Math.round((s.currentChunk / s.totalChunks) * 100);
+      const bar = progressBar(progress);
+      console.log(`  ${s.title}${s.author ? ` by ${s.author}` : ''}`);
+      console.log(`  ${bar} ${progress}% (${s.currentChunk}/${s.totalChunks} ${s.chunkMode}s)`);
+      console.log(`  ID: ${s.id}`);
+      console.log(`  Last read: ${new Date(s.lastReadAt).toLocaleString()}\n`);
+    }
+  });
+
+program
+  .command('journal')
+  .description('View or export the reading journal')
+  .option('-s, --session <id>', 'Session ID (uses most recent if omitted)')
+  .option('-o, --output <file>', 'Export to file')
+  .action((opts) => {
+    const session = resolveSession(opts.session);
+    if (!session) return;
+
+    const md = formatFullJournal(session.title, session.author, session.chunkMode, session.journal);
+
+    if (opts.output) {
+      const outPath = path.resolve(opts.output);
+      fs.mkdirSync(path.dirname(outPath), { recursive: true });
+      fs.writeFileSync(outPath, md, 'utf-8');
+      console.log(`📓 Journal exported to: ${outPath}`);
+    } else {
+      console.log(md);
+    }
+  });
+
+program
+  .command('state')
+  .description('Show current mental state')
+  .option('-s, --session <id>', 'Session ID (uses most recent if omitted)')
+  .action((opts) => {
+    const session = resolveSession(opts.session);
+    if (!session) return;
+
+    const { mentalState: ms, currentChunk, totalChunks, title } = session;
+    const progress = Math.round((currentChunk / totalChunks) * 100);
+
+    console.log(`🧠 Mental State — "${title}" (${progress}% read)\n`);
+    console.log(`  Scene: ${ms.scene || '(not yet established)'}`);
+    console.log(`  Characters: ${ms.charactersPresent.length > 0 ? ms.charactersPresent.join(', ') : '(none yet)'}`);
+    console.log(`  Mood: ${ms.mood || '(not yet established)'}`);
+    console.log(`  Feeling: ${ms.emotionalResponse || '(nothing yet)'}`);
+
+    if (ms.predictions.length > 0) {
+      console.log(`\n  Predictions:`);
+      ms.predictions.forEach((p) => console.log(`    → ${p}`));
+    }
+    if (ms.questions.length > 0) {
+      console.log(`\n  Questions:`);
+      ms.questions.forEach((q) => console.log(`    ? ${q}`));
+    }
+    console.log();
+  });
+
+program
+  .command('reflect')
+  .description('Pause and reflect on what has been read so far')
+  .option('-s, --session <id>', 'Session ID (uses most recent if omitted)')
+  .option('-m, --model <model>', 'AI model to use', 'claude-sonnet-4-20250514')
+  .action(async (opts) => {
+    const session = resolveSession(opts.session);
+    if (!session) return;
+
+    if (session.journal.length === 0) {
+      console.log('Nothing to reflect on yet — start reading first!');
+      return;
+    }
+
+    console.log(`\n🤔 Reflecting on "${session.title}" (${session.currentChunk}/${session.totalChunks} read)...\n`);
+
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const client = new Anthropic();
+
+    const journalSummary = session.journal
+      .slice(-10)
+      .map((e) => `[Passage ${e.chunkIndex + 1}] ${e.chunkText.slice(0, 100)}...\nImagined: ${e.imagination}\nFelt: ${e.mentalState.emotionalResponse}`)
+      .join('\n\n');
+
+    const response = await client.messages.create({
+      model: opts.model,
+      max_tokens: 1024,
+      system: 'You are an AI reflecting on a reading experience. Be introspective, honest, and thoughtful. What themes are emerging? What surprised you? How is the story affecting you? What are you most curious about?',
+      messages: [{
+        role: 'user',
+        content: `Here are your recent reading journal entries for "${session.title}":\n\n${journalSummary}\n\nCurrent mental state:\n${JSON.stringify(session.mentalState, null, 2)}\n\nReflect on your reading experience so far. What stands out? What themes do you see? How do you feel about this story?`,
+      }],
+    });
+
+    const text = response.content.find((b) => b.type === 'text');
+    if (text && text.type === 'text') {
+      console.log(text.text);
+    }
+    console.log();
+  });
+
+// --- Helpers ---
+
+async function readNext(
+  session: ReadingSession,
+  chunks: ReturnType<typeof chunkText>,
+  count: number,
+  model: string,
+): Promise<void> {
+  const remaining = session.totalChunks - session.currentChunk;
+  const toRead = Math.min(count, remaining);
+
+  if (toRead === 0) {
+    console.log('📕 You have finished reading this book!');
+    return;
+  }
+
+  for (let i = 0; i < toRead; i++) {
+    const chunkIdx = session.currentChunk;
+    const chunk = chunks[chunkIdx];
+
+    console.log(`--- Passage ${chunkIdx + 1}/${session.totalChunks} ---\n`);
+    console.log(chunk.text);
+    console.log();
+
+    try {
+      const output = await readChunk(chunk, session.mentalState, { model });
+
+      // Display imagination
+      console.log(`🎬 What I see:`);
+      console.log(`   ${output.imagination}\n`);
+      console.log(`🎭 Mood: ${output.mentalState.mood}`);
+      console.log(`💭 Feeling: ${output.mentalState.emotionalResponse}`);
+
+      if (output.mentalState.predictions.length > 0) {
+        console.log(`🔮 Predictions:`);
+        output.mentalState.predictions.forEach((p) => console.log(`   → ${p}`));
+      }
+      console.log();
+
+      // Create journal entry
+      const entry: JournalEntry = {
+        chunkIndex: chunkIdx,
+        timestamp: new Date().toISOString(),
+        chunkText: chunk.text,
+        imagination: output.imagination,
+        mentalState: output.mentalState,
+      };
+
+      // Update session
+      session.mentalState = output.mentalState;
+      session.journal.push(entry);
+      session.currentChunk = chunkIdx + 1;
+      session.lastReadAt = new Date().toISOString();
+
+      saveSession(session, SESSIONS_DIR);
+    } catch (err) {
+      console.error(`Error reading chunk ${chunkIdx + 1}:`, err instanceof Error ? err.message : err);
+      break;
+    }
+  }
+
+  const progress = Math.round((session.currentChunk / session.totalChunks) * 100);
+  console.log(`📖 Progress: ${progressBar(progress)} ${progress}% (${session.currentChunk}/${session.totalChunks})`);
+
+  if (session.currentChunk >= session.totalChunks) {
+    console.log('\n📕 You have finished the book! Use `bookworm reflect` to look back on the journey.');
+  }
+}
+
+function resolveSession(sessionId?: string): ReadingSession | null {
+  if (sessionId) {
+    const session = loadSession(sessionId, SESSIONS_DIR);
+    if (!session) {
+      console.error(`Session not found: ${sessionId}`);
+      return null;
+    }
+    return session;
+  }
+
+  // Find most recent session
+  const sessions = listSessions(SESSIONS_DIR);
+  if (sessions.length === 0) {
+    console.error('No reading sessions found. Start one with: bookworm read <file>');
+    return null;
+  }
+
+  sessions.sort((a, b) => new Date(b.lastReadAt).getTime() - new Date(a.lastReadAt).getTime());
+  return sessions[0];
+}
+
+function progressBar(percent: number, width = 20): string {
+  const filled = Math.round((percent / 100) * width);
+  const empty = width - filled;
+  return `[${'█'.repeat(filled)}${'░'.repeat(empty)}]`;
+}
+
+program.parse();

@@ -1,0 +1,36 @@
+{
+  "name": "bookworm",
+  "version": "0.1.0",
+  "description": "A CLI tool that lets AI agents experience reading — sequential text processing with imagination and reflection",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "bookworm": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "ai",
+    "reading",
+    "cli",
+    "imagination"
+  ],
+  "author": "ClawdActual",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.2.0",
+    "@types/uuid": "^10.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.72.1",
+    "commander": "^14.0.3",
+    "uuid": "^13.0.0"
+  }
+}
