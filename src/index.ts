@@ -6,6 +6,7 @@ import { chunkText } from './chunker.js';
 import { createSession, saveSession, loadSession, listSessions } from './state.js';
 import { readChunk } from './reader.js';
 import { formatJournalEntry, formatFullJournal } from './journal.js';
+import { extractText } from './formats.js';
 import type { ChunkMode, ReadingSession, JournalEntry } from './types.js';
 
 const SESSIONS_DIR = path.join(process.cwd(), 'sessions');
@@ -34,7 +35,13 @@ program
       process.exit(1);
     }
 
-    const text = fs.readFileSync(filePath, 'utf-8');
+    let text: string;
+    try {
+      text = await extractText(filePath);
+    } catch (err) {
+      console.error(`Failed to extract text: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    }
     const title = opts.title ?? path.basename(file, path.extname(file));
     const chunkMode = opts.chunk as ChunkMode;
     const chunks = chunkText(text, chunkMode);
@@ -65,7 +72,13 @@ program
     const session = resolveSession(opts.session);
     if (!session) return;
 
-    const text = fs.readFileSync(session.bookPath, 'utf-8');
+    let text: string;
+    try {
+      text = await extractText(session.bookPath);
+    } catch (err) {
+      console.error(`Failed to extract text: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    }
     const chunks = chunkText(text, session.chunkMode);
     const count = parseInt(opts.count, 10);
 
@@ -181,6 +194,107 @@ program
       console.log(text.text);
     }
     console.log();
+  });
+
+program
+  .command('search')
+  .description('Search for text across the book')
+  .argument('<query>', 'Text to search for')
+  .option('-s, --session <id>', 'Session ID (uses most recent if omitted)')
+  .option('-c, --context <n>', 'Number of surrounding chunks to show', '2')
+  .action(async (query: string, opts) => {
+    const session = resolveSession(opts.session);
+    if (!session) return;
+
+    let text: string;
+    try {
+      text = await extractText(session.bookPath);
+    } catch (err) {
+      console.error(`Failed to extract text: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    }
+    const chunks = chunkText(text, session.chunkMode);
+    const contextSize = parseInt(opts.context, 10);
+    const queryLower = query.toLowerCase();
+
+    const matches = chunks.filter((c) => c.text.toLowerCase().includes(queryLower));
+
+    if (matches.length === 0) {
+      console.log(`No matches found for "${query}".`);
+      return;
+    }
+
+    console.log(`🔍 Found ${matches.length} match${matches.length === 1 ? '' : 'es'} for "${query}":\n`);
+
+    for (const match of matches) {
+      const start = Math.max(0, match.index - contextSize);
+      const end = Math.min(chunks.length - 1, match.index + contextSize);
+
+      console.log(`--- Match in ${session.chunkMode} ${match.index + 1} ---\n`);
+
+      for (let i = start; i <= end; i++) {
+        const prefix = i === match.index ? '>>> ' : '    ';
+        const label = `[${session.chunkMode} ${i + 1}]`;
+        // Truncate long chunks for display
+        const preview = chunks[i].text.length > 200
+          ? chunks[i].text.slice(0, 200) + '...'
+          : chunks[i].text;
+        console.log(`${prefix}${label} ${preview}`);
+      }
+      console.log();
+    }
+  });
+
+program
+  .command('note')
+  .description('Add a note/annotation')
+  .argument('<text>', 'Note text')
+  .option('-s, --session <id>', 'Session ID (uses most recent if omitted)')
+  .option('-c, --chunk <n>', 'Chunk index to annotate (defaults to current position)')
+  .action((text: string, opts) => {
+    const session = resolveSession(opts.session);
+    if (!session) return;
+
+    const chunkIndex = opts.chunk !== undefined
+      ? parseInt(opts.chunk, 10)
+      : Math.max(0, session.currentChunk - 1);
+
+    // Initialize notes array for older sessions
+    if (!session.notes) {
+      session.notes = [];
+    }
+
+    session.notes.push({
+      chunkIndex,
+      text,
+      timestamp: new Date().toISOString(),
+    });
+
+    saveSession(session, SESSIONS_DIR);
+    console.log(`📝 Note added at ${session.chunkMode} ${chunkIndex + 1}: "${text}"`);
+  });
+
+program
+  .command('notes')
+  .description('List all notes for a session')
+  .option('-s, --session <id>', 'Session ID (uses most recent if omitted)')
+  .action((opts) => {
+    const session = resolveSession(opts.session);
+    if (!session) return;
+
+    const notes = session.notes ?? [];
+
+    if (notes.length === 0) {
+      console.log('No notes yet. Add one with: bookworm note "your note"');
+      return;
+    }
+
+    console.log(`📝 Notes for "${session.title}":\n`);
+    for (const note of notes) {
+      const time = new Date(note.timestamp).toLocaleString();
+      console.log(`  [${session.chunkMode} ${note.chunkIndex + 1}] ${note.text}`);
+      console.log(`  ${time}\n`);
+    }
   });
 
 // --- Helpers ---

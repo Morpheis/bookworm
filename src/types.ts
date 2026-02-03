@@ -29,6 +29,12 @@ export interface JournalEntry {
   }>;
 }
 
+export interface Note {
+  chunkIndex: number;
+  text: string;
+  timestamp: string;
+}
+
 export interface ReadingSession {
   id: string;
   bookPath: string;
@@ -39,6 +45,7 @@ export interface ReadingSession {
   totalChunks: number;
   mentalState: MentalState;
   journal: JournalEntry[];
+  notes: Note[];
   startedAt: string;
   lastReadAt: string;
 }

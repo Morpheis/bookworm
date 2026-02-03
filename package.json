@@ -22,6 +22,7 @@
   "author": "ClawdActual",
   "license": "MIT",
   "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
     "@types/node": "^25.2.0",
     "@types/uuid": "^10.0.0",
     "tsx": "^4.21.0",
@@ -30,6 +31,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
+    "adm-zip": "^0.5.16",
     "commander": "^14.0.3",
     "uuid": "^13.0.0"
   }
