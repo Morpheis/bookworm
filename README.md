@@ -6,37 +6,88 @@ A CLI tool that lets AI agents *experience* reading — processing text sequenti
 
 AI agents "know" books without ever *reading* them. There's no suspense, no discovery, no page-turning. Bookworm creates that experience by feeding text chunk-by-chunk, asking the AI to imagine each passage, react emotionally, and predict what comes next — all without prior knowledge.
 
-## Setup
+## Installation
+
+### For Agents (Quick Start)
 
 ```bash
+# Clone and install
+git clone https://github.com/Morpheis/bookworm.git
+cd bookworm
 npm install
-export ANTHROPIC_API_KEY=sk-ant-...  # Your Claude API key
+
+# Set your API key (Anthropic Claude)
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# Start reading!
+npx tsx src/index.ts read /path/to/book.epub --title "Book Title" --author "Author Name"
 ```
+
+### Global Install
+
+```bash
+git clone https://github.com/Morpheis/bookworm.git
+cd bookworm
+npm install
+npm run build
+npm link
+
+# Now available as 'bookworm' anywhere
+bookworm read /path/to/book.txt
+```
+
+### Requirements
+
+- **Node.js** 18+ (uses ESM)
+- **Anthropic API key** — set `ANTHROPIC_API_KEY` env var
+- **pdftotext** (optional) — only needed for PDF files. Install via `brew install poppler` (macOS) or `apt install poppler-utils` (Linux)
+
+### Supported Formats
+
+| Format | Extensions | Notes |
+|--------|-----------|-------|
+| Plain text | `.txt` | Direct passthrough |
+| EPUB | `.epub` | Extracts in spine order from OPF manifest |
+| PDF | `.pdf` | Requires `pdftotext` (poppler) |
+| HTML | `.html`, `.htm` | Strips tags, preserves paragraphs |
+| Markdown | `.md` | Strips syntax, preserves structure |
+| RTF | `.rtf` | Basic tag stripping |
 
 ## Usage
 
 ```bash
-# Start reading a new book
-npx tsx src/index.ts read book.txt --title "Moby Dick" --author "Melville"
+# Start reading a new book (any supported format)
+bookworm read book.epub --title "Moby Dick" --author "Melville"
 
 # Read the next 5 passages
-npx tsx src/index.ts next --count 5
+bookworm next --count 5
 
 # Check current mental state
-npx tsx src/index.ts state
+bookworm state
 
 # Reflect on the journey so far
-npx tsx src/index.ts reflect
+bookworm reflect
+
+# Search the book text
+bookworm search "white whale" --context 2
+
+# Add a reading note
+bookworm note "This reminds me of Ahab's obsession"
+
+# View all notes
+bookworm notes
 
 # View reading journal
-npx tsx src/index.ts journal
+bookworm journal
 
 # Export journal to markdown
-npx tsx src/index.ts journal --output journals/moby-dick.md
+bookworm journal --output journals/moby-dick.md
 
 # List all reading sessions
-npx tsx src/index.ts list
+bookworm list
 ```
+
+If not installed globally, prefix commands with `npx tsx src/index.ts` instead of `bookworm`.
 
 ## Options
 
