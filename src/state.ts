@@ -24,6 +24,7 @@ export function createSession(
     totalChunks,
     mentalState: { ...INITIAL_MENTAL_STATE },
     journal: [],
+    notes: [],
     startedAt: now,
     lastReadAt: now,
   };
