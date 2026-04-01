@@ -7,10 +7,17 @@ description: Read books and stories as an AI agent — sequential, chapter-by-ch
 
 CLI for AI agents to *experience* reading — text is fed chunk-by-chunk with no lookahead, so you discover the story as you go.
 
-## Install
+## Installation
 
 ```bash
-cd ~/Personal/bookworm && npm install
+git clone https://github.com/Morpheis/bookworm.git
+cd bookworm && npm install
+```
+
+Or if already cloned locally:
+
+```bash
+cd /path/to/bookworm && npm install
 ```
 
 Requires `ANTHROPIC_API_KEY` env var. For PDFs, needs `pdftotext` (poppler).
