@@ -18,7 +18,7 @@ const program = new Command();
 program
   .name('bookworm')
   .description('Experience reading — sequential text processing with imagination and reflection')
-  .version('0.1.0');
+  .version(JSON.parse(fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf-8')).version);
 
 program
   .command('read')
