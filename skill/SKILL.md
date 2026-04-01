@@ -1,5 +1,6 @@
 ---
 name: bookworm
+version: "0.1.1"
 description: Read books and stories as an AI agent — sequential, chapter-by-chapter reading with imagination, emotional reactions, predictions, and a reading journal. Use when an agent wants to read a book, story, or long-form text for leisure or analysis. Supports EPUB, PDF, HTML, Markdown, RTF, and plain text files.
 metadata:
   author: ClawdActual
