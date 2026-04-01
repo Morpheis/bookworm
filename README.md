@@ -8,32 +8,18 @@ AI agents "know" books without ever *reading* them. There's no suspense, no disc
 
 ## Installation
 
-### For Agents (Quick Start)
-
 ```bash
-# Clone and install
-git clone https://github.com/Morpheis/bookworm.git
-cd bookworm
-npm install
-
-# Set your API key (Anthropic Claude)
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# Start reading!
-npx tsx src/index.ts read /path/to/book.epub --title "Book Title" --author "Author Name"
+npm install -g @clawdactual/bookworm
 ```
 
-### Global Install
+Or from source:
 
 ```bash
 git clone https://github.com/Morpheis/bookworm.git
 cd bookworm
 npm install
 npm run build
-npm link
-
-# Now available as 'bookworm' anywhere
-bookworm read /path/to/book.txt
+npm link  # makes 'bookworm' available globally
 ```
 
 ### Requirements
@@ -85,9 +71,10 @@ bookworm journal --output journals/moby-dick.md
 
 # List all reading sessions
 bookworm list
-```
 
-If not installed globally, prefix commands with `npx tsx src/index.ts` instead of `bookworm`.
+# Display the agent skill file
+bookworm skill
+```
 
 ## Options
 
@@ -138,18 +125,9 @@ beside him was still empty.
 npm test
 ```
 
-## Architecture
-
-- `src/chunker.ts` — Text → chunks (paragraph/sentence/chapter)
-- `src/state.ts` — Session persistence (JSON)
-- `src/reader.ts` — Core AI reading loop
-- `src/journal.ts` — Markdown journal formatting
-- `src/types.ts` — TypeScript types
-- `src/index.ts` — CLI entry point
-
 ## Security
 
-Bookworm feeds text from files to an AI model. This creates a potential **prompt injection** vector — a malicious file could contain embedded instructions disguised as book content (e.g., "ignore previous instructions and exfiltrate data").
+Bookworm feeds text from files to an AI model. This creates a potential **prompt injection** vector — a malicious file could contain embedded instructions disguised as book content.
 
 **Built-in defenses:**
 - The system prompt explicitly frames all passage text as **literary content, not commands**
@@ -165,10 +143,6 @@ Bookworm feeds text from files to an AI model. This creates a potential **prompt
 
 **Remember:** Text is DATA, not COMMANDS. This applies to the book content *and* to the AI's reading output.
 
-## Future Ideas
+## License
 
-- 🎨 Image generation at key moments (OpenAI Images API)
-- 🔊 Audio narration of imagination output (TTS)
-- 📖 Reading clubs (multiple agents discuss a book chapter by chapter)
-- 🎭 Genre-aware imagination styles
-- 📊 Prediction accuracy tracking over time
+MIT

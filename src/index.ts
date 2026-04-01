@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { chunkText } from './chunker.js';
 import { createSession, saveSession, loadSession, listSessions } from './state.js';
 import { readChunk } from './reader.js';
@@ -392,5 +393,25 @@ function progressBar(percent: number, width = 20): string {
   const empty = width - filled;
   return `[${'█'.repeat(filled)}${'░'.repeat(empty)}]`;
 }
+
+program
+  .command('skill')
+  .description('Display the SKILL.md — teaches agents how to use bookworm')
+  .option('--path', 'Print the file path instead of the content')
+  .action((opts) => {
+    const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+    const skillPath = path.join(packageRoot, 'skill', 'SKILL.md');
+
+    if (!fs.existsSync(skillPath)) {
+      console.error(`SKILL.md not found at ${skillPath}`);
+      process.exit(1);
+    }
+
+    if (opts.path) {
+      console.log(skillPath);
+    } else {
+      console.log(fs.readFileSync(skillPath, 'utf-8'));
+    }
+  });
 
 program.parse();
